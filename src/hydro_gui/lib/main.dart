@@ -49,7 +49,7 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  void _sendMessage() {
+  void _sendMessage() { // Send message to PI
     if (_socket != null && _controller.text.isNotEmpty) {
       _socket!.write(_controller.text);
       print('Sent: ${_controller.text}');
