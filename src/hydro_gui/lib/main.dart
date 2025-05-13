@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io'; // For sockets
+import 'dart:convert'; // For utf8 encoding
 
 void main() {
   runApp(MyApp());
@@ -20,33 +21,121 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    //_connectToServer();
+    //Start LoRa executable first
+    runLoraExecutable();
     _connectToServer();
   }
 
+  Future<void> runLoraExecutable() async {
+  try {
+    final process = await Process.start(
+      '/home/hydro/project/backend/Hydro-LoRa-Shield/lora', // Path to the lora executable
+      [],
+      workingDirectory: Directory.current.path,
+      runInShell: true,
+    );
+
+    process.stdout.transform(SystemEncoding().decoder).listen((line) {
+      print('lora stdout: $line');
+      setState(() {
+        receivedMessages.add('LoRa: $line'); // Add LoRa output to messages
+      });
+    });
+
+    process.stderr.transform(SystemEncoding().decoder).listen((line) {
+      print('lora stderr: $line');
+      setState(() {
+        receivedMessages.add('LoRa Error: $line'); // Add LoRa errors to messages
+      });
+    });
+
+    final exitCode = await process.exitCode;
+    print('lora exited with code: $exitCode');
+  } catch (e) {
+    print('Error running lora executable: $e');
+    setState(() {
+      receivedMessages.add('Error running LoRa: $e');
+    });
+  }
+  }
+
   void _connectToServer() async {
-    try {
-      _socket = await Socket.connect('127.0.0.1', 8080); // Replace with your server IP and port
-      print('Connected to server');
-      _socket!.listen(
-        (data) {
-          String message = String.fromCharCodes(data);
-          print('Received: $message');
+    int retryCount = 0;
+    const maxRetries = 10; // Maximum number of retries
+    const retryDelay = Duration(seconds: 3); // Delay between retries
+
+    while (retryCount < maxRetries) {
+      try {
+        print('Attempting to connect (attempt ${retryCount + 1}/$maxRetries)...');
+        _socket = await Socket.connect('127.0.0.1', 8080);
+        print('Connected to server');
+        setState(() {
+          receivedMessages.add('Connected to server successfully');
+        });
+
+        // Start listening to the socket
+        _socket!.listen(
+          (data) {
+            try {
+              String message = const Utf8Decoder().convert(data);
+              print('Received (utf8): $message');
+              setState(() {
+                receivedMessages.add('Received: $message');
+              });
+            } catch (e) {
+              print('Decoding error: $e');
+              setState(() {
+                receivedMessages.add('Received binary data: ${data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ').toUpperCase()}');
+              });
+            }
+          },
+          onError: (error) {
+            print('Socket error: $error');
+            setState(() {
+              receivedMessages.add('Socket error: $error');
+            });
+            _socket?.destroy();
+            _attemptReconnect();
+          },
+          onDone: () {
+            print('Server disconnected');
+            setState(() {
+              receivedMessages.add('Server disconnected - attempting to reconnect...');
+            });
+            _socket?.destroy();
+            _attemptReconnect();
+          },
+        );
+        break; // Exit the loop if connection is successful
+      } catch (e) {
+        retryCount++;
+        print('Connection attempt $retryCount failed: $e');
+        setState(() {
+          receivedMessages.add('Connection attempt $retryCount failed: $e');
+        });
+
+        if (retryCount < maxRetries) {
           setState(() {
-            receivedMessages.add(message);
+            receivedMessages.add('Retrying in ${retryDelay.inSeconds} seconds...');
           });
-        },
-        onError: (error) {
-          print('Socket error: $error');
-          _socket?.destroy();
-        },
-        onDone: () {
-          print('Server disconnected');
-          _socket?.destroy();
-        },
-      );
-    } catch (e) {
-      print('Could not connect to server: $e');
+          await Future.delayed(retryDelay);
+        } else {
+          print('Could not connect to server after $maxRetries attempts');
+          setState(() {
+            receivedMessages.add('Failed to connect after $maxRetries attempts');
+            receivedMessages.add('Please check if the server is running and try restarting the app');
+          });
+        }
+      }
     }
+  }
+
+  void _attemptReconnect() {
+    Future.delayed(Duration(seconds: 3), () {
+      print('Attempting to reconnect...');
+      _connectToServer();
+    });
   }
 
   void _sendMessage() { // Send message to PI
