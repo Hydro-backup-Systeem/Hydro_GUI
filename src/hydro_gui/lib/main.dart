@@ -29,6 +29,20 @@ class _MyAppState extends State<MyApp> {
     _connectToServer();
   }
 
+  void _scrollToBottom() { // Function to scroll to the bottom of the list
+    _appScrollController.animateTo(
+      _appScrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+
+    _driverScrollController.animateTo(
+      _driverScrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
   Future<void> runLoraExecutable() async { // Function to run the lora executable
     try {
       final process = await Process.start(
@@ -70,22 +84,28 @@ class _MyAppState extends State<MyApp> {
     while (retryCount < maxRetries) {
       try {
         print('Attempting to connect (attempt ${retryCount + 1}/$maxRetries)...');
-        _socket = await Socket.connect('127.0.0.1', 8080);
+        final host = InternetAddress('/tmp/hydro.sock', type: InternetAddressType.unix);
+        _socket = await Socket.connect(host, 0);
         print('Connected to server');
         setState(() {
           appMessages.add('Connection to driver is ready to go!');
         });
+        _scrollToBottom(); // Auto-scroll to the bottom when connected
 
         _socket!.listen(
           (data) {
             try {
-              String message = const Utf8Decoder().convert(data);
-              print('RECEIVED FROM DRIVER: $message');
+              print('Raw data received: ${data.length} bytes');
+              String message = String.fromCharCodes(data).trim();
+              print('Decoded message: $message');
               setState(() {
-                driverMessages.add('RECEIVED FROM DRIVER: $message');
+                driverMessages.add(message);  // Remove the "RECEIVED FROM DRIVER" prefix
               });
+
+              _scrollToBottom(); // Auto-scroll to the bottom when a new message is received
             } catch (e) {
               print('Decoding error: $e');
+              print('Raw data: $data');
             }
           },
           onError: (error) {
@@ -112,6 +132,7 @@ class _MyAppState extends State<MyApp> {
             //receivedMessages.add('Failed to connect after $maxRetries attempts');
             appMessages.add('SOCKET CRASHED! Please restart the app.');
           });
+          _scrollToBottom(); // Auto-scroll to the bottom when connection fails
         }
       }
     }
@@ -124,18 +145,6 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  // void _scrollToBottom() {
-  //   WidgetsBinding.instance.addPostFrameCallback((_) {
-  //     if (_scrollController.hasClients) {
-  //       _scrollController.animateTo(
-  //         _scrollController.position.maxScrollExtent,
-  //         duration: const Duration(milliseconds: 300),
-  //         curve: Curves.easeOut,
-  //       );
-  //     }
-  //   });
-  // }
-
   void _sendMessage() { // Send message to PI
     if (_socket != null && _controller.text.isNotEmpty) {
       _socket!.write(_controller.text);
@@ -144,29 +153,45 @@ class _MyAppState extends State<MyApp> {
         appMessages.add('Sent: $_controller'); // Add to app messages
       });
       _controller.clear();
-      //_scrollToBottom(); // Auto-scroll after sending a message
+      _scrollToBottom(); // Auto-scroll after sending a message
     }
   }
 
   void _sendPresetMessage(String message) { // Send preset message to PI
     if (_socket != null) {
-      _socket!.write(message);
+      String presetID = "";
+      switch (message) {
+        case "Box Box":
+          presetID = "preset1";
+          break;
+        case "Try harder in sector 2":
+          presetID = "preset2";
+          break;
+        case "You are now in pole position":
+          presetID = "preset3";
+          break;
+        default:
+          print('Unknown preset message');
+          return;
+      }
+      _socket!.write(presetID);
       print('Sent preset: $message');
       setState(() {
         appMessages.add('Sent Preset: $message');
       });
-      //_scrollToBottom(); // Auto-scroll after sending preset message
+      _scrollToBottom(); // Auto-scroll after sending preset message
     }
   }
 
   void _sendFlagMessage(String message) { // Send flag message to PI
     if (_socket != null) {
-      _socket!.write(message);
-      print('Sent preset: $message');
+      String flagID = "FLAG:$message";
+      _socket!.write(flagID);
+      print('Sent preset: $flagID');
       setState(() {
-        appMessages.add('Sent Flag: $message');
+        appMessages.add('Sent Flag: $flagID');
       });
-      //_scrollToBottom(); // Auto-scroll after sending preset message
+      _scrollToBottom(); // Auto-scroll after sending preset message
     }
   }
 
@@ -213,7 +238,7 @@ Widget build(BuildContext context) {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('DICTONARY PRESETS',
+                        Text('DICTIONARY PRESETS',
                             style: TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 8),
@@ -249,12 +274,12 @@ Widget build(BuildContext context) {
                             mainAxisSpacing: 10,
                             childAspectRatio: 3.5,
                             children: [
-                              _buildFlagButton('Blue Flag', Icons.flag, Colors.blue, 'flag1'),
-                              _buildFlagButton('Meatball Flag', Icons.flag, Colors.orange, 'flag2'),
-                              _buildFlagButton('Yellow Flag', Icons.flag, const Color.fromARGB(255, 201, 184, 36), 'flag3'),
-                              _buildFlagButton('Black Flag', Icons.flag, Colors.black, 'flag4'),
-                              _buildFlagButton('Green Flag', Icons.flag, Colors.green, 'flag5'),
-                              _buildFlagButton('Red Flag', Icons.flag, Colors.red, 'flag6'),
+                              _buildFlagButton('Blue Flag', Icons.flag, Colors.blue, '1'),
+                              _buildFlagButton('Meatball Flag', Icons.flag, Colors.orange, '3'),
+                              _buildFlagButton('Yellow Flag', Icons.flag, const Color.fromARGB(255, 201, 184, 36), '5'),
+                              _buildFlagButton('Black Flag', Icons.flag, Colors.black, '0'),
+                              _buildFlagButton('Green Flag', Icons.flag, Colors.green, '2'),
+                              _buildFlagButton('Red Flag', Icons.flag, Colors.red, '4'),
                             ],
                           ),
                         ),
