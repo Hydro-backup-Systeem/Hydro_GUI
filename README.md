@@ -11,6 +11,8 @@ To run this application, you’ll need to have both Flutter and the backend inst
 
 To build and run the app on the Raspberry Pi, use the following commands:
 
+>**Note:** We initially attempted to run and build it on a Raspberry Pi 3, but it got stuck during the process. This was likely due to the limited RAM on the Pi 3. As a result, we switched to using a Raspberry Pi 4.
+
 ```bash
 # This will build a linux release version (no debug)
 flutter build linux --release
@@ -40,7 +42,9 @@ Communication with the driver is achieved through two message types: **preset** 
   Users can input their own messages using a text box. These messages are sent as raw text and are spoken aloud via **speech synthesis** on the Nucleo.  
   However, since some messages may not be clearly spoken due to synthesis limitations, presets are preferred for critical communications.
 
-### Types of Messages in Detail
+---
+
+### Types of Messages to send (in detail)
 
 #### Preset Messages
 
@@ -66,7 +70,9 @@ Quick-access flag buttons are also available in the left panel for rapid signali
 A text input field allows you to type and send personalized messages to the driver.  
 Messages are sent by clicking the **Send** button.
 
-### Displayed Messages from App and Driver
+---
+
+### Receiving Messages from App and Driver
 
 On the **right-hand side** of the application, there are two panels displaying messages received from the backend:
 
@@ -76,6 +82,7 @@ On the **right-hand side** of the application, there are two panels displaying m
 - **Driver Messages**  
   These are the actual messages sent by the driver and received through the backend, allowing you to monitor driver responses in real-time.
 
+--- 
 ### Backend Auto-Start on App Launch
 
 To streamline integration, the Flutter app automatically launches the **LoRa backend executable** when it starts.
